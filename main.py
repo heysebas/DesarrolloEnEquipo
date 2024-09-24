@@ -155,10 +155,35 @@ def upload_file():
     if file_path:
         try:
             df = pd.read_csv(file_path)
+
+            # Conectar a la base de datos
+            conn = mysql.connector.connect(
+                host='localhost',
+                user='root',
+                password='0908',
+                database='periodicos'
+            )
+            cursor = conn.cursor()
+
+            # Iterar sobre las filas del DataFrame
             for index, row in df.iterrows():
-                tree.insert("", "end", values=row.tolist())
+                nombre = row['nombre']
+                for date_col in row.index[1:]:  # Ignorar la primera columna (nombre)
+                    fecha = datetime.strptime(date_col, '%d-%m-%Y').date()  # Cambia el formato según sea necesario
+                    cantidad = row[date_col]
+                    cursor.execute("""
+                        INSERT INTO records (nombre, fecha, cantidad)
+                        VALUES (%s, %s, %s)
+                    """, (nombre, fecha, cantidad))
+
+            conn.commit()
+            messagebox.showinfo("Éxito", "Datos subidos correctamente.")
+            load_data_from_db()  # Recargar los datos en la tabla después de la carga
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo leer el archivo:\n{e}")
+        finally:
+            if conn:
+                conn.close()
 
 
 def save_to_db():
@@ -200,12 +225,6 @@ root.title("Análisis de Artículos de Noticias")
 table_frame = tk.Frame(root)
 table_frame.pack(expand=True, fill='both', padx=10, pady=10)
 
-# Mostrar la tabla vacía
-tree = show_table()
-
-# Cargar datos desde la base de datos al iniciar
-load_data_from_db()
-
 # Campo de entrada para agregar nombres
 name_label = tk.Label(root, text="Ingrese el nombre:")
 name_label.pack(pady=5)
@@ -235,6 +254,12 @@ upload_button.pack(pady=10)
 # Botón para guardar en la base de datos
 save_button = tk.Button(root, text="Guardar en la base de datos", command=save_to_db)
 save_button.pack(pady=10)
+
+# Mostrar la tabla vacía
+tree = show_table()
+
+# Cargar datos desde la base de datos al iniciar
+load_data_from_db()
 
 # Iniciar la aplicación
 root.mainloop()
