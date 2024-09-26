@@ -88,6 +88,10 @@ def load_data_from_db():
         cursor.execute("SELECT nombre, fecha, cantidad FROM records")
         results = cursor.fetchall()
 
+        # Limpiar el árbol antes de insertar nuevos datos
+        for row in tree.get_children():
+            tree.delete(row)
+
         # Agrupar los resultados por nombre
         data = {}
         for nombre, fecha, cantidad in results:
@@ -261,28 +265,29 @@ number_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 add_number_button = tk.Button(main_frame, text="Agregar número", command=add_number)
 add_number_button.grid(row=1, column=2, padx=5, pady=5, sticky="w")
 
-# Botón para subir un archivo CSV (lado derecho)
-upload_button = tk.Button(main_frame, text="Subir archivo CSV", command=upload_file)
-upload_button.grid(row=0, column=3, padx=5, pady=5, sticky="e")
+# Botón para subir archivo CSV
+upload_button = tk.Button(main_frame, text="Subir CSV", command=upload_file)
+upload_button.grid(row=2, column=0, columnspan=3, padx=5, pady=5, sticky="we")
 
-# Botón para guardar en la base de datos (lado derecho)
+# Botón para guardar en la base de datos
 save_button = tk.Button(main_frame, text="Guardar en DB", command=save_to_db)
-save_button.grid(row=1, column=3, padx=5, pady=5, sticky="e")
-
-# Marco para la tabla
-table_frame = tk.Frame(root)
-table_frame.pack(expand=True, fill='both', padx=10, pady=10)
-
-# Crear el árbol de la tabla principal
-columns = ['Nombre'] + get_last_7_days()
-tree = show_table(root, columns)
-
-# Cargar datos iniciales
-load_data_from_db()
+save_button.grid(row=3, column=0, columnspan=3, padx=5, pady=5, sticky="we")
 
 # Botón para mostrar datos de los últimos 6 meses
-show_6_months_button = tk.Button(root, text="Mostrar datos de los últimos 6 meses", command=show_last_6_months_data)
-show_6_months_button.pack(pady=10)
+show_button = tk.Button(main_frame, text="Mostrar últimos 6 meses", command=show_last_6_months_data)
+show_button.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="we")
 
-# Iniciar el bucle principal
+# Crear el árbol para mostrar los datos
+columns = ['Nombre'] + get_last_7_days()
+tree = ttk.Treeview(main_frame, columns=columns, show='headings')
+
+for col in columns:
+    tree.heading(col, text=col)
+    tree.column(col, anchor="center")
+
+tree.grid(row=5, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
+
+# Cargar datos iniciales desde la base de datos
+load_data_from_db()
+
 root.mainloop()
