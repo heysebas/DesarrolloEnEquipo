@@ -1,23 +1,19 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import pandas as pd
 from tkinter import ttk
+import pandas as pd
 import mysql.connector
 from datetime import datetime, timedelta
-import random
-
+import numpy as np
 
 # Funciones para manejo de datos
 
 def get_last_6_months_data():
-    """Obtiene las fechas de los últimos 6 meses."""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=180)
     return start_date, end_date
 
-
 def load_data():
-    """Carga datos de la base de datos para los últimos 6 meses."""
     start_date, end_date = get_last_6_months_data()
     conn = mysql.connector.connect(
         host='localhost',
@@ -26,57 +22,29 @@ def load_data():
         database='periodicos'
     )
     cursor = conn.cursor()
-    cursor.execute("SELECT fecha, cantidad, nombre FROM records WHERE fecha BETWEEN %s AND %s", (start_date, end_date))
+    cursor.execute("SELECT fecha, cantidad FROM records WHERE fecha BETWEEN %s AND %s", (start_date, end_date))
     data = cursor.fetchall()
     cursor.close()
     conn.close()
     return data
 
+def calculate_average(data):
+    return np.mean([x[1] for x in data])
 
-def show_last_6_months_data():
-    """Muestra los datos de los últimos 6 meses en una nueva ventana."""
-    data = load_data()
+def check_below_threshold(daily_count, average_count):
+    threshold = average_count * 0.8
+    return daily_count < threshold
 
-    # Crear una nueva ventana
-    new_window = tk.Toplevel(root)
-    new_window.title("Datos de los Últimos 6 Meses")
+def coefficient_of_variation(data):
+    mean = np.mean(data)
+    std_dev = np.std(data)
+    return (std_dev / mean) * 100 if mean != 0 else 0
 
-    # Obtener las fechas para los últimos 6 meses
-    columns = ['Nombre'] + [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(180)][::-1]
-    tree = show_table(new_window, columns)
-
-    # Agrupar datos por nombre
-    grouped_data = {}
-    for fecha, cantidad, nombre in data:
-        if nombre not in grouped_data:
-            grouped_data[nombre] = [''] * 180  # Inicializa la lista con celdas vacías
-        index = (datetime.now() - fecha).days
-        if index < 180:
-            grouped_data[nombre][179 - index] = cantidad
-
-    # Insertar datos en el árbol
-    for nombre, cantidades in grouped_data.items():
-        tree.insert("", "end", values=[nombre] + cantidades)
-
-    # Ajustar el tamaño de las columnas
-    for col in columns:
-        tree.column(col, width=100)
-
-
-def show_table(parent, columns):
-    """Muestra una tabla en la ventana proporcionada."""
-    tree = ttk.Treeview(parent, columns=columns, show='headings')
-
-    for col in columns:
-        tree.heading(col, text=col)
-        tree.column(col, anchor="center")
-
-    tree.pack(expand=True, fill='both')
-    return tree
-
+def notify_if_below_threshold(daily_count, average_count, nombre):
+    if check_below_threshold(daily_count, average_count):
+        messagebox.showwarning("Advertencia", f"{nombre} ha subido menos artículos de los esperados.")
 
 def load_data_from_db():
-    """Carga datos desde la base de datos en la tabla principal."""
     try:
         conn = mysql.connector.connect(
             host='localhost',
@@ -87,10 +55,6 @@ def load_data_from_db():
         cursor = conn.cursor()
         cursor.execute("SELECT nombre, fecha, cantidad FROM records")
         results = cursor.fetchall()
-
-        # Limpiar el árbol antes de insertar nuevos datos
-        for row in tree.get_children():
-            tree.delete(row)
 
         # Agrupar los resultados por nombre
         data = {}
@@ -112,43 +76,74 @@ def load_data_from_db():
         if conn:
             conn.close()
 
-
 def get_last_7_days():
-    """Obtiene las fechas de los últimos 7 días."""
     today = datetime.now()
     return [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
 
+def show_table():
+    last_7_days = get_last_7_days()
+    columns = ['nombre'] + last_7_days
+    tree = ttk.Treeview(table_frame, columns=columns, show='headings')
 
-def populate_data():
-    """Genera datos de prueba para 6 meses."""
-    conn = mysql.connector.connect(
-        host='localhost',
-        user='root',
-        password='0908',
-        database='periodicos'
-    )
-    cursor = conn.cursor()
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, anchor="center")
 
-    for i in range(180):  # Generar datos por 6 meses
-        date = (datetime.now() - timedelta(days=i)).date()
-        nombre = f"Diario {random.choice(['A', 'B', 'C'])}"
-        count = random.randint(50, 150)  # Artículos entre 50 y 150
-        cursor.execute("INSERT INTO records (nombre, fecha, cantidad) VALUES (%s, %s, %s)", (nombre, date, count))
+    tree.pack(expand=True, fill='both')
+    return tree
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+def load_all_data_from_db():
+    try:
+        conn = mysql.connector.connect(
+            host='localhost',
+            user='root',
+            password='0908',
+            database='periodicos'
+        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT nombre, fecha, cantidad FROM records")
+        results = cursor.fetchall()
 
+        data = {}
+        fechas = set()
+        for nombre, fecha, cantidad in results:
+            if nombre not in data:
+                data[nombre] = {}
+            fecha_str = fecha.strftime("%Y-%m-%d")
+            data[nombre][fecha_str] = cantidad
+            fechas.add(fecha_str)
+
+        fechas = sorted(fechas)
+
+        show_all_days_table(data, fechas)
+
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudieron cargar los datos:\n{e}")
+    finally:
+        if conn:
+            conn.close()
+
+def show_all_days_table(data, fechas):
+    columns = ['nombre'] + fechas
+    tree = ttk.Treeview(table_frame, columns=columns, show='headings')
+
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, anchor="center")
+
+    for nombre, cantidades in data.items():
+        values = [nombre] + [cantidades.get(fecha, '') for fecha in fechas]
+        tree.insert("", "end", values=values)
+
+    tree.pack(expand=True, fill='both')
+    return tree
 
 def add_name():
-    """Agrega un nombre a la tabla."""
     name = name_entry.get()
     if name:
         tree.insert("", "end", values=[name] + [''] * 7)
 
-
 def add_number():
-    """Agrega un número a la fecha seleccionada."""
     selected_item = tree.selection()
     if selected_item:
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -161,18 +156,17 @@ def add_number():
                 values[current_index] = number
                 tree.item(selected_item, values=values)
 
+                daily_count = int(number)
+                avg_count = calculate_average(load_data())
+                notify_if_below_threshold(daily_count, avg_count, values[0])
         else:
             messagebox.showwarning("Advertencia", "No se puede modificar el valor de la fecha actual.")
 
-
 def upload_file():
-    """Sube un archivo CSV a la base de datos."""
     file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
     if file_path:
         try:
             df = pd.read_csv(file_path)
-
-            # Conectar a la base de datos
             conn = mysql.connector.connect(
                 host='localhost',
                 user='root',
@@ -181,11 +175,10 @@ def upload_file():
             )
             cursor = conn.cursor()
 
-            # Iterar sobre las filas del DataFrame
             for index, row in df.iterrows():
                 nombre = row['nombre']
-                for date_col in row.index[1:]:  # Ignorar la primera columna (nombre)
-                    fecha = datetime.strptime(date_col, '%d-%m-%Y').date()  # Cambia el formato según sea necesario
+                for date_col in row.index[1:]:
+                    fecha = datetime.strptime(date_col, '%d-%m-%Y').date()
                     cantidad = row[date_col]
                     cursor.execute("""
                         INSERT INTO records (nombre, fecha, cantidad)
@@ -194,16 +187,14 @@ def upload_file():
 
             conn.commit()
             messagebox.showinfo("Éxito", "Datos subidos correctamente.")
-            load_data_from_db()  # Recargar los datos en la tabla después de la carga
+            load_data_from_db()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo leer el archivo:\n{e}")
         finally:
             if conn:
                 conn.close()
 
-
 def save_to_db():
-    """Guarda los datos de la tabla en la base de datos."""
     try:
         conn = mysql.connector.connect(
             host='localhost',
@@ -223,7 +214,6 @@ def save_to_db():
                     cursor.execute("""
                         INSERT INTO records (nombre, fecha, cantidad)
                         VALUES (%s, %s, %s)
-                        ON DUPLICATE KEY UPDATE cantidad = VALUES(cantidad)  -- Actualizar si ya existe
                     """, (nombre, fecha, fechas[i]))
 
         conn.commit()
@@ -234,60 +224,58 @@ def save_to_db():
         if conn:
             conn.close()
 
-
 # Configuración de la ventana principal
 root = tk.Tk()
 root.title("Análisis de Artículos de Noticias")
+root.geometry("1800x900")
 
-# Marco principal para organización
-main_frame = tk.Frame(root)
-main_frame.pack(expand=True, fill='both', padx=10, pady=10)
+# Crear marcos para organizar la interfaz
+input_frame = ttk.Frame(root, padding="10")
+input_frame.pack(fill='x')
+
+table_frame = ttk.Frame(root, padding="10")
+table_frame.pack(expand=True, fill='both')
+
+button_frame = ttk.Frame(root, padding="10")
+button_frame.pack(fill='x')
 
 # Campo de entrada para agregar nombres
-name_label = tk.Label(main_frame, text="Ingrese el nombre:")
-name_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+name_label = ttk.Label(input_frame, text="Ingrese el nombre:")
+name_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
 
-name_entry = tk.Entry(main_frame)
-name_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+name_entry = ttk.Entry(input_frame)
+name_entry.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
 
 # Botón para agregar nombre
-add_button = tk.Button(main_frame, text="Agregar nombre", command=add_name)
-add_button.grid(row=0, column=2, padx=5, pady=5, sticky="w")
+add_button = ttk.Button(input_frame, text="Agregar nombre", command=add_name)
+add_button.grid(row=0, column=2, padx=5, pady=5)
 
 # Campo de entrada para agregar un número
-number_label = tk.Label(main_frame, text="Ingrese un número para la fecha seleccionada:")
-number_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+number_label = ttk.Label(input_frame, text="Ingrese un número para la fecha seleccionada:")
+number_label.grid(row=1, column=0, padx=5, pady=5, sticky='w')
 
-number_entry = tk.Entry(main_frame)
-number_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+number_entry = ttk.Entry(input_frame)
+number_entry.grid(row=1, column=1, padx=5, pady=5, sticky='ew')
 
 # Botón para agregar número
-add_number_button = tk.Button(main_frame, text="Agregar número", command=add_number)
-add_number_button.grid(row=1, column=2, padx=5, pady=5, sticky="w")
+add_number_button = ttk.Button(input_frame, text="Agregar número", command=add_number)
+add_number_button.grid(row=1, column=2, padx=5, pady=5)
 
-# Botón para subir archivo CSV
-upload_button = tk.Button(main_frame, text="Subir CSV", command=upload_file)
-upload_button.grid(row=2, column=0, columnspan=3, padx=5, pady=5, sticky="we")
+# Botones para subir archivo, guardar en BD y cargar datos
+upload_button = ttk.Button(button_frame, text="Subir archivo CSV", command=upload_file)
+upload_button.grid(row=0, column=0, padx=5, pady=5)
 
-# Botón para guardar en la base de datos
-save_button = tk.Button(main_frame, text="Guardar en DB", command=save_to_db)
-save_button.grid(row=3, column=0, columnspan=3, padx=5, pady=5, sticky="we")
+save_button = ttk.Button(button_frame, text="Guardar en la base de datos", command=save_to_db)
+save_button.grid(row=0, column=1, padx=5, pady=5)
 
-# Botón para mostrar datos de los últimos 6 meses
-show_button = tk.Button(main_frame, text="Mostrar últimos 6 meses", command=show_last_6_months_data)
-show_button.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="we")
+load_button = ttk.Button(button_frame, text="Cargar últimos 7 días", command=load_data_from_db)
+load_button.grid(row=0, column=2, padx=5, pady=5)
 
-# Crear el árbol para mostrar los datos
-columns = ['Nombre'] + get_last_7_days()
-tree = ttk.Treeview(main_frame, columns=columns, show='headings')
+all_days_button = ttk.Button(button_frame, text="Mostrar todos los días", command=load_all_data_from_db)
+all_days_button.grid(row=0, column=3, padx=5, pady=5)
 
-for col in columns:
-    tree.heading(col, text=col)
-    tree.column(col, anchor="center")
+# Mostrar la tabla inicial
+tree = show_table()
 
-tree.grid(row=5, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
-
-# Cargar datos iniciales desde la base de datos
-load_data_from_db()
-
+# Iniciar la aplicación
 root.mainloop()
