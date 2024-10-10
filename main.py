@@ -88,7 +88,7 @@ def add_name():
         tree.insert("", "end", values=[name] + [''] * 7)
 
 def add_number():
-    """Añade el número de artículos a la tabla para la fecha actual."""
+    """Añade el número de artículos a la tabla para la fecha actual y muestra el cuartil correspondiente."""
     selected_item = tree.selection()
     if selected_item:
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -107,8 +107,22 @@ def add_number():
                 avg_count = promedios.get(nombre, 0)
 
                 notify_if_below_threshold(daily_count, avg_count, nombre)
+
+                # Calcular y mostrar el cuartil
+                data = load_data()
+                q1, q2, q3 = calculate_quartiles(data)
+                if daily_count <= q1:
+                    cuartil = "Q1"
+                elif daily_count <= q2:
+                    cuartil = "Q2"
+                elif daily_count <= q3:
+                    cuartil = "Q3"
+                else:
+                    cuartil = "Q4"
+                messagebox.showinfo("Cuartil", f"El número de artículos ingresado pertenece al {cuartil}.")
         else:
             messagebox.showwarning("Advertencia", "No se puede modificar el valor de la fecha actual.")
+
 
 def upload_file():
     """Carga un archivo CSV y sube los datos a la base de datos."""

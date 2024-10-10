@@ -1,0 +1,10 @@
+pandas==2.0.3       # Manejo de datos y tablas
+numpy==1.24.3       # Operaciones numéricas avanzadas
+scipy==1.11.1       # Operaciones estadísticas y científicas
+matplotlib==3.7.2   # Visualización de gráficos
+seaborn==0.12.2     # Visualización de datos estadísticos
+scikit-learn==1.3.1 # Machine learning y análisis estadístico
+requests==2.31.0    # Realizar solicitudes HTTP
+sqlalchemy==2.0.20  # ORM para manejo de bases de datos
+flask==2.3.3        # Framework para APIs web
+pyinstaller==5.10.1 # Empaquetado de aplicaciones Python
